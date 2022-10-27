@@ -1,26 +1,55 @@
 import github from "./db.js";
 import { useCallback, useEffect, useState } from "react"
 import query from "./query"
+import RepoInfo from "./RepoInfo"
+import SearchBox from "./SearchBox.js";
+import NavButtons from "./NavButtons.js";
+
 
 function App() {
   const [userName, setUserName] = useState("")
   const [repoList, setRepoList] = useState(null)
+  const [pageCount, setPageCount] = useState(10)
+  const [queryString, setQueryString] = useState("")
+  const [totalCount, setTotalCount] = useState(null)
+  const [startCursor, setStartCursor] = useState(null)
+  const [endCursor, setEndCursor] = useState(null)
+  const [hasPreviousPage, setHasPreviousPage] = useState(false)
+  const [hasNextPage, setHasNextPage] = useState(true)
+  const [paginationKeyword, setPaginationKeyword] = useState("first")
+  const [paginationString, setPaginationString] = useState("")
 
   const fetchData = useCallback(() => {
+    const queryText = JSON.stringify(query(pageCount, queryString, paginationKeyword, paginationString))
+
     fetch(github.baseURL, {
       method: 'POST',
       headers: github.headers,
-      body: JSON.stringify(query)
+      body: queryText
     }).then((response) => response.json())
       .then((data) => {
         const viewer = data.data.viewer
+        const repos = data.data.search.edges;
+        const total = data.data.search.repositoryCount;
+        const start = data.data.search.pageInfo?.startCursor
+        const end = data.data.search.pageInfo?.endCursor
+        const next = data.data.search.pageInfo?.hasNextPage
+        const prev = data.data.search.pageInfo?.hasPreviousPage
+
+
         setUserName(viewer.name)
-        setRepoList(viewer.repositories.nodes)
+        setRepoList(repos)
+        setTotalCount(total)
+
+        setStartCursor(start)
+        setEndCursor(end)
+        setHasNextPage(next)
+        setHasPreviousPage(prev)
 
       }).catch(err => {
         console.log("err", err);
       })
-  }, [])
+  }, [pageCount, queryString, paginationKeyword, paginationString])
 
 
   useEffect(() => {
@@ -35,22 +64,45 @@ function App() {
       </h1>
       <p>Hey There {userName}</p>
 
+      <SearchBox
+        totalCount={totalCount}
+        pageCount={pageCount}
+        queryString={queryString}
+        onTotalChange={(myNumber) => { setPageCount(myNumber) }}
+        onQueryChange={(myString) => { setQueryString(myString) }} />
+      <NavButtons start={startCursor}
+        end={endCursor}
+        next={hasNextPage}
+        previous={hasPreviousPage}
+        onPage={(myKeyword, myString) => {
+          setPaginationKeyword(myKeyword)
+          setPaginationString(myString)
+        }}
+
+      />
+
+
       {
         repoList && (
           <ul className="list-group list-group-flush">
             {
               repoList.map((repo) => (
-                <li className="list-group-item" key={repo.id.toString()}>
-                  <a className="h5 mb-0 text-decoration-none" href={repo.url}>
-                    {repo.name}
-                  </a>
-                  <p className="small">{repo.description}</p>
-                </li>
+                <RepoInfo key={repo.node.id} repo={repo.node} />
               ))
             }
           </ul>
         )
       }
+      <NavButtons start={startCursor}
+        end={endCursor}
+        next={hasNextPage}
+        previous={hasPreviousPage}
+        onPage={(myKeyword, myString) => {
+          setPaginationKeyword(myKeyword)
+          setPaginationString(myString)
+        }}
+
+      />
     </div>
   );
 }
